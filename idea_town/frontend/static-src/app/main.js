@@ -6,29 +6,13 @@ import HeaderView from './views/header-view';
 import Me from './models/me';
 import PageManager from './lib/page-manager';
 import Router from './lib/router';
+import Experiment from './models/experiment';
 
 app.extend({
   initialize() {
-    // for now, instantiate the collection with dummy data
-    app.experiments = new ExperimentsCollection([
-      {
-        displayName: 'Universal Search',
-        name: 'universal-search',
-        isInstalled: false
-      }, {
-        displayName: 'Side Tabs',
-        name: 'side-tabs',
-        isInstalled: false
-      }, {
-        displayName: 'Snooze Tabs',
-        name: 'snooze-tabs',
-        isInstalled: false
-      }, {
-        displayName: 'Cheese Tabs',
-        name: 'cheese-tabs',
-        isInstalled: false
-      }
-    ]);
+
+    app.experiments = new ExperimentsCollection();
+    app.experiments.fetch();
     app.webChannel = webChannel;
     app.me = new Me();
 
