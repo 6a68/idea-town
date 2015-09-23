@@ -1,6 +1,7 @@
-// @import '../../../../node_modules/normalize.scss/normalize';
-// @import 'normalize';
 @import '../vendor/normalize.css/normalize';
+
+// pull in tabzilla just so the build tools see it
+@import '../vendor/mozilla-tabzilla/css/tabzilla.scss';
 
 @import 'base';
 
