@@ -56,6 +56,9 @@ WIKI: https://wiki.mozilla.org/Idea-Town
 * If you change `requirements.txt` to add dependencies for Django, you must rebuild `server`:
   * `docker-compose build server`
 
+* If `docker-compose build` seems to hang, try deleting dangling images, then try again:
+  * `docker rmi $(docker images -f dangling=true -q)`
+
 [dc-bug]: https://github.com/docker/compose/issues/374
 
 Run the tests
