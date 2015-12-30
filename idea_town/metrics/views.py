@@ -13,7 +13,7 @@ datadog.initialize(**settings.DATADOG_KEYS)
 
 
 class MetricsView(APIView):
-    permission_classes = (IsAuthenticated,)
+    permission_classes = ()
 
     def get(self, request):
         return Response(request.data)
