@@ -58,6 +58,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'storages',
     'markupfield',
+    'sslserver',
 
     # FxA auth handling
     'allauth',
