@@ -6,7 +6,6 @@
 
 const settings = {};
 
-let ideaTownAddonAPI;
 let currentPageMod;
 let app;
 
@@ -36,6 +35,7 @@ const SERVER_ENVIRONMENTS = {
 
 const store = require('sdk/simple-storage').storage;
 const {Cc, Ci, Cu} = require('chrome');
+Cu.import("resource://gre/modules/Services.jsm");
 const self = require('sdk/self');
 const tabs = require('sdk/tabs');
 const {PageMod} = require('sdk/page-mod');
@@ -48,6 +48,7 @@ const URL = require('sdk/url').URL;
 const IdeaTown = require('idea-town');
 const cookieManager2 = Cc['@mozilla.org/cookiemanager;1']
                        .getService(Ci.nsICookieManager2);
+const pingServer = require('./lib/ping-server');
 
 function updatePrefs() {
   // Select the environment, with production as a default.
@@ -63,9 +64,6 @@ function updatePrefs() {
     IDEATOWN_PREFIX: env.IDEATOWN_PREFIX
   });
 
-  // Ensure we have a properly configured metrics client.
-  ideaTownAddonAPI = new IdeaTown(settings);
-
   // Set up new PageMod, destroying any previously existing one.
   if (currentPageMod) { currentPageMod.destroy(); }
   currentPageMod = new PageMod({
@@ -76,6 +74,50 @@ function updatePrefs() {
     onAttach: setupApp
   });
 }
+
+// Listen for metrics events from experiments.
+const metrics = {
+  isInitialized: false,
+  init: function() {
+    if (this.isInitialized) {
+      return;
+    }
+    this.isInitialized = true;
+    // Note: the observer service holds a strong reference to this observer,
+    // so we must detach it on shutdown / uninstall by calling destroy().
+    Services.obs.addObserver(metrics, 'idea-town::send-metric', false);
+  },
+  destroy: function() {
+    Services.obs.removeObserver(metrics, 'idea-town::send-metric', false);
+    this.isInitialized = false;
+  },
+  // The metrics object format is { key, value, addonName }, where
+  //   "key" is the name of the event,
+  //   "value" is the value of the event (can be a complex object),
+  //   "addonName" is the name of the experiment sending the data.
+  observe: function() {
+    // The nsIObserverService sends non-useful positional arguments; the third
+    // is the only one we need
+    const data = arguments[2];
+
+    let d;
+    try {
+      d = JSON.parse(data);
+    } catch (ex) {
+      console.error('Idea Town metrics error: cannot process event, ' +
+                    ' JSON.parse failed: ', ex);
+      return;
+    }
+    if (d && 'key' in d && 'value' in d && 'addonName' in d) {
+      pingServer(settings, d.key, d.value, d.addonName);
+    } else {
+      // TODO: verify this error message will be visible to experiments
+      console.error('Idea Town metrics objects must have "key", "value", and' +
+                    ' "addonName" properties. Object received was ', d);
+    }
+  }
+};
+metrics.init();
 
 // Register handler to reconfigure on pref change, kick off initial setup
 simplePrefs.on('SERVER_ENVIRONMENT', updatePrefs);
@@ -159,7 +201,12 @@ Router.prototype.on = function(name, f) {
 Router.prototype.send = function(name, data, addon) {
   if (addon) {
     data.tags = ['main-addon'];
-    ideaTownAddonAPI.metric(name, data, addon);
+    const packet = JSON.stringify({
+      key: name,
+      value: data,
+      addonName: addon
+    });
+    Services.obs.notifyObserver(null, 'idea-town::send-metric', packet);
   }
   this.mod.port.emit('from-addon-to-web', {type: name, data: data});
   return this;
@@ -298,6 +345,7 @@ function generateUUID() {
 }
 
 require('sdk/system/unload').when(function(reason) {
+  metrics.destroy();
   if (reason === 'uninstall') {
     app.send('addon-self:uninstalled');
     if (store.installedAddons) {
