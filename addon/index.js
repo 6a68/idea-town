@@ -156,6 +156,13 @@ function initServerEnvironmentPreference() {
   });
 }
 
+function openOnboardingTab() {
+  tabs.open({
+    url: env.BASE_URL + '/onboarding',
+    inBackground: true
+  });
+}
+
 function setupApp() {
   updateExperiments().then(() => {
     app = new Router(messageBridgePageMod);
@@ -171,43 +178,6 @@ function setupApp() {
         clientUUID: store.clientUUID,
         installed: store.installedAddons
       });
-    });
-
-    app.on('show-installed-panel', () => {
-      const installMsgPanel = Panel({ // eslint-disable-line new-cap
-        contentURL: './base.html',
-        contentScriptFile: './panel.js',
-        onShow: () => installMsgPanel.port.emit('show', templates.installed)
-      });
-
-      installMsgPanel.on('hide', () => {
-        app.send('addon-self:install-panel-dismissed');
-      });
-
-      function destroyInstallPanel() {
-        if (installMsgPanel) {
-          installMsgPanel.destroy();
-        }
-      }
-
-      // get the test pilot tab and listen for deactivate or
-      // close events, so we can hide the 'installed' panel.
-      // BUG(DJ): deactivate event won't fire first time through
-      // https://bugzilla.mozilla.org/show_bug.cgi?id=1230816
-      let tab;
-      for (tab of tabs) {
-        if (tab.url.includes(settings.BASE_URL)) {
-          tab.on('close', destroyInstallPanel);
-          tab.on('deactivate', destroyInstallPanel);
-        }
-      }
-
-      installMsgPanel.show({width: INSTALLED_PANEL_WIDTH,
-                            height: INSTALLED_PANEL_HEIGHT,
-                            position: ToolbarButton.button});
-
-      // allow us to hide the panel from a landing page interaction
-      app.on('hide-installed-panel', destroyInstallPanel);
     });
 
     if (self.loadReason === 'install') {
@@ -469,6 +439,10 @@ exports.main = function(options) {
 
   if (reason === 'install' || reason === 'enable') {
     Metrics.onEnable();
+  }
+
+  if (reason === 'install') {
+    openOnboardingTab();
   }
 
   initServerEnvironmentPreference();
