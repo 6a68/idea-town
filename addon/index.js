@@ -124,7 +124,9 @@ function initServerEnvironmentPreference() {
   // seem to work. So, let's use Promise.all() to fire off multiple queries and
   // collate them ourselves.
   const envNames = Object.keys(SERVER_ENVIRONMENTS);
-  Promise.all(envNames.map(name => new Promise(resolve => {
+
+  // Return the promise so that callers can take action after the env is ready.
+  return Promise.all(envNames.map(name => new Promise(resolve => {
     history.search(
       {url: SERVER_ENVIRONMENTS[name].BASE_URL + '/*'},
       {count: 1, sort: 'date', descending: true}
@@ -158,7 +160,7 @@ function initServerEnvironmentPreference() {
 
 function openOnboardingTab() {
   tabs.open({
-    url: env.BASE_URL + '/onboarding',
+    url: settings.BASE_URL + '/onboarding',
     inBackground: true
   });
 }
@@ -441,11 +443,13 @@ exports.main = function(options) {
     Metrics.onEnable();
   }
 
-  if (reason === 'install') {
-    openOnboardingTab();
-  }
+  let afterEnvReady = initServerEnvironmentPreference();
 
-  initServerEnvironmentPreference();
+  // Wait until the server environment has been determined, then open the
+  // onboarding tab, if needed.
+  if (reason === 'install') {
+    afterEnvReady.then(openOnboardingTab);
+  }
   Metrics.init();
   WebExtensionChannels.init();
   ToolbarButton.init(settings);
