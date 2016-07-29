@@ -1,6 +1,7 @@
 #four-oh-four,
 #retire,
-#share {
+#share,
+#onboarding {
   margin-bottom: $grid-unit * 1.5;
   position: relative;
 
@@ -327,4 +328,8 @@
     text-transform: lowercase;
     width: 15%;
   }
+}
+
+.toolbar-button-onboarding {
+  @include hidpi-background-image('toolbar-button-onboarding', 314px 50px);
 }
