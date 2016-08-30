@@ -7,6 +7,7 @@ export default Collection.extend({
   model: Experiment,
   indexes: ['slug'],
   url: '/api/experiments.json',
+  usageCountsUrl: '/api/experiments/usage_counts.json',
   comparator: 'order',
 
   // Ampersand.sync doesn't seem to pass correct Accept headers by default.
@@ -22,11 +23,19 @@ export default Collection.extend({
   },
 
   fetch(optionsIn) {
-    return new Promise((resolve, reject) => {
-      const options = optionsIn || {};
-      options.success = resolve;
-      options.error = reject;
-      Collection.prototype.fetch.call(this, options);
+    // Fetch usage counts and experiment content in parallel.
+    return Promise.all([
+      fetch(this.usageCountsUrl).then(response => response.json()),
+      new Promise((resolve, reject) => {
+        const options = optionsIn || {};
+        options.success = resolve;
+        options.error = reject;
+        Collection.prototype.fetch.call(this, options);
+      })
+    ]).then(([counts, coll]) => {
+      // Update all the fetched models with corresponding usage counts
+      this.forEach(item => item.installation_count = counts[item.addon_id] || 0);
+      return coll;
     });
   },
 
