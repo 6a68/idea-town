@@ -11,7 +11,6 @@ const Events = require('sdk/system/events');
 const PrefsService = require('sdk/preferences/service');
 const self = require('sdk/self');
 const store = require('sdk/simple-storage').storage;
-const request = require('sdk/request').Request;
 
 const PingCentre = require('ping-centre');
 const seedrandom = require('seedrandom');
@@ -164,11 +163,8 @@ const Metrics = module.exports = {
     data.v = 1; // Version -- https://developers.google.com/analytics/devguides/collection/protocol/v1/
     data.tid = 'UA-49796218-47';
     data.cid = store.clientUUID;
-    const req = request({
-      url: 'https://ssl.google-analytics.com/collect',
-      content: data
-    });
-    req.post();
+    // Use the hidden window to access DOM APIs.
+    Services.appShell.hiddenDOMWindow.navigator.sendBeacon('https://ssl.google-analytics.com/collect', data);
   },
 
   onExperimentPing: function(ev) {
