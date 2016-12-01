@@ -13,6 +13,7 @@ const self = require('sdk/self');
 const store = require('sdk/simple-storage').storage;
 const request = require('sdk/request').Request;
 
+const PingCentre = require('ping-centre');
 const seedrandom = require('seedrandom');
 
 // Event type for receiving pings from experiments
@@ -127,6 +128,13 @@ const Metrics = module.exports = {
       ea: object,
       el: eventName
     });
+
+    // Duplicate the work done by submitExternalPing, then send to Ping Centre.
+    const ping = TelemetryController.getCurrentPingData();
+    ping.type = 'testpilot';
+    ping.payload = payload;
+    const pingCentre = new PingCentre('testpilot');
+    pingCentre.sendPing(ping);
   },
 
   experimentEnabled: function(addonId) {
