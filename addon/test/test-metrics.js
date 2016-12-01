@@ -29,12 +29,18 @@ const mocks = {
     TelemetryController: ['submitExternalPing'],
     AddonManager: ['getAddonByID'],
     request: ['post'],
-    PrefsService: ['set', 'get']
+    PrefsService: ['set', 'get'],
+    PingCentre: ['sendPing']
   })
 };
 
 const mockLoader = MockUtils.loader(module, './lib/metrics.js', {
   './node_modules/seedrandom/index.js': mocks.callbacks.seedrandom.seedrandom,
+  './node_modules/ping-centre/index.js': {
+    PingCentre: function() {
+      return mocks.callbacks.pingCentre;
+    }
+  },
   'sdk/request': {
     Request: function() {
       return mocks.callbacks.request;
@@ -183,16 +189,7 @@ exports['test Metrics.pingTelemetry()'] = assert => {
   const name = 'test-event-name';
   const object = {alpha: 1, beta: 2};
   const timestamp = Date.now();
-
-  Metrics.pingTelemetry(object, name, timestamp);
-
-  const pingCalls = mocks.callbacks.TelemetryController.submitExternalPing.calls();
-
-  assert.equal(pingCalls.length, 1, 'There should be 1 call to telemetry');
-
-  const args = pingCalls[0];
-  assert.equal(args[0], TELEMETRY_TESTPILOT, 'subject should be testpilot');
-  assert.deepEqual(args[1], {
+  const expectedPayload = {
     'timestamp': BROWSER_DURATION,
     'test': self.id,
     'version': self.version,
@@ -203,9 +200,25 @@ exports['test Metrics.pingTelemetry()'] = assert => {
         'object': object
       }
     ]
-  }, 'payload should have expected structure');
+  };
+
+  Metrics.pingTelemetry(object, name, timestamp);
+
+  const pingCalls = mocks.callbacks.TelemetryController.submitExternalPing.calls();
+
+  assert.equal(pingCalls.length, 1, 'There should be 1 call to telemetry');
+
+  const args = pingCalls[0];
+  assert.equal(args[0], TELEMETRY_TESTPILOT, 'subject should be testpilot');
+  assert.deepEqual(args[1], expectedPayload, 'telemetry payload should have expected structure');
   assert.deepEqual(args[2], {addClientId: true, addEnvironment: true},
                    'options should include client ID and environment');
+
+  const pingCentreCalls = mocks.callbacks.PingCentre.sendPing.calls();
+  assert.equal(pingCentreCalls.length, 1, 'There should be 1 call to ping centre');
+  const pingCentreArgs = pingCentreCalls[0];
+  assert.equal(args[0], expectedPayload, 
+               'ping centre payload structure should match telemetry ping');
 };
 
 exports['test Metrics.experimentEnabled'] = assert => {
