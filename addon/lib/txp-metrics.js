@@ -4,8 +4,7 @@
 // should work for webextensions, sdk, and restartless addons.
 // TODO: detect webextension vs sdk vs bootstrapped automatically.
 //
-// const metrics = new Metrics(); // webextension experiment without GA
-// const metrics = new Metrics({type:'sdk'}); // SDK experiment without GA
+// const metrics = new Metrics(); // experiment without GA
 // const metrics = new Metrics({tid: xxx, cid: xxx, type: 'sdk'}); // SDK experiment with GA
 // const metrics = new Metrics({tid: xxx, cid: xxx, type: 'sdk', topic: 'testpilot'}); // testpilot itself
 //
@@ -16,15 +15,11 @@
 
 
 
-
-const TYPES = ['sdk', 'webextension', 'bootstrapped'];
-
 // config object:
 //   tid: GA tid. required to use GA.
 //   cid: GA cid. required to use GA.
-//   type: addon type, 'sdk' or 'webextension' or 'bootstrapped'
 //   (optional) topic: 'testpilottest' by default
-function Metrics({tid, cid, type, topic}) {
+function Metrics({tid, cid, topic}) {
   if (tid && cid) {
     this.tid = tid || null;
     this.cid = cid || null;
@@ -34,19 +29,22 @@ function Metrics({tid, cid, type, topic}) {
   // should just use the default 'testpilottest' topic.
   this.topic = topic || 'testpilottest';
 
-  if (type && !TYPES.includes(type)) {
-    throw new Error(`Unable to initialize txp-metrics: addon type '${type}' not recognized.`);
-  }
-  this.type = type || 'webextension';
-
   // We'll need Services.jsm, unless we're in a webextension.
-  // TODO: what if we just try/catch this for all addons? Then we can detect the type.
-  if (this.type == 'sdk') {
+  // TODO: what if we just try/catch this for all addons? Then we can detect the type. See if this works...
+  try {
     const { Cu } = require('chrome');
     Cu.import('resource://gre/modules/Services.jsm');
-  } else if (this.type == 'bootstrapped') {
-    // Components should always be defined.
-    Components.utils.import('resource://gre/modules/Services.jsm');
+    this.type = 'sdk';
+  } catch(ex) {
+    // If require wasn't defined, try the bootstrapped approach:
+    try {
+      // Components should always be defined.
+      Components.utils.import('resource://gre/modules/Services.jsm');
+      this.type = 'bootstrapped';
+    } catch(ex) {
+      // If everything failed, it must be a webextension.
+      this.type = 'webextension';
+    }
   }
 }
 
