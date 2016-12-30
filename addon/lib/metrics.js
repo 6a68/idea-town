@@ -14,7 +14,6 @@ const store = require('sdk/simple-storage').storage;
 
 const PingCentre = require('ping-centre');
 const seedrandom = require('seedrandom');
-const Joi = require('joi');
 
 // Event type for receiving pings from experiments
 const EVENT_SEND_METRIC = 'testpilot::send-metric';
@@ -155,16 +154,6 @@ const Metrics = module.exports = {
       data: JSON.stringify(dataParsed),
       subject: self.id
     });
-  },
-
-  sendGAEvent: function(data) {
-    // So, here, we'd do this instead:
-    
-
-    data.v = 1; // Version -- https://developers.google.com/analytics/devguides/collection/protocol/v1/
-    data.tid = 'UA-49796218-47';
-    data.cid = store.clientUUID;
-    sendBeacon('https://ssl.google-analytics.com/collect', data);
   },
 
   onExperimentPing: function(ev) {
