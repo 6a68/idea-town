@@ -1,57 +1,51 @@
-// todo: extract to npm :-)
-
 // goal: existing addons can just drop this in and not change their packet format.
 // should work for webextensions, sdk, and restartless addons.
 //
 // const metrics = new Metrics({id: '@min-vid'}); // experiment without GA
 // const metrics = new Metrics({id: '@min-vid', tid: xxx, cid: xxx}); // SDK experiment with GA
-// 
-// // this shorthand is nicer, if you just want to send events. might be good to have the full
-// // metrics object while debugging, to verify its state.
-// const { sendEvent } = new Metrics({id: 'testpilot@mozilla', tid: xxx, cid: xxx, topic: 'testpilot'}); // testpilot itself
+// const metrics = new Metrics({id: 'testpilot@mozilla', tid: xxx, cid: xxx, topic: 'testpilot'}); // testpilot itself
 //
-// usage:
-//
-// sendEvent({id: 
-//
-//
-//
+// TODO: document usage
 // TODO: why not just use ES6 modules?
-
-// TODO: remember to add this to package.json
-const PingCentre = require('ping-centre');
 
 // Abstract the sendBeacon DOM API, since sketchy hidden window magic is
 // needed to get the reference, if the addon is not a WebExtension.
 let _sendBeacon;
 
-// config object:
+// Required keys in the config object:
 //   tid: GA tid. required to use GA.
 //   cid: GA cid. required to use GA.
-//   id: we need the addon's ID (like '@min-vid'). better to get it once, here.
-//   topic: (optional) 'testpilottest' by default. No experiment needs to change this value.
-//   It's only modified by the Test Pilot addon.
-//   debug: (optional) false by default; if true, logs to console. This value
-//   can be updated after the object is instantiated.
+//   id: the addon's ID (like '@min-vid'). While FF now supports WebExtensions
+//       without an explicit ID, because TxP experiments aren't hosted on AMO,
+//       an ID is needed to sign them anyway.
+//
+// Optional keys in the config object:
+//   transform: a function used to modify GA pings before sending them. The
+//   default is to always use the 'event' GA ping type, but if experiment
+//   authors want to use different events for different situations, then
+//   passing in a transform function allows for that.
+//   topic: 'testpilottest' by default. Experiments should not need to change
+//          this value. It's only changed by the Test Pilot addon.
+//   debug: false by default; if true, this module will console.log info that
+//          is useful for debugging. Note that this value can be changed after
+//          the object is instantiated: set  `metrics.debug = true` in a paused
+//          debugger to see what is or isn't happening.
 function Metrics(opts) {
-  // The console must be initialized first, since other init steps log to
+  // Note: the console must be initialized first, since other init steps log to
   // console in debug mode.
   this._initConsole();
   this._initValues(opts);
   this._initTransports();
 }
 
-// o is an object with some stuff:
-//   o.data = the actual packet
-//   o.id = the id of the addon, like '@foo' or 'foo@bar'.
 Metrics.prototype = {
 
   /* public API */
 
   // The sendEvent method forwards pings to Google Analytics, if configured.
   // It also tries to send pings to Telemetry and Ping Centre, discarding
-  // any errors encountered. These endpoints will generally only work while the
-  // add-on is an active Test Pilot experiment.
+  // any errors encountered. The Telemetry and Ping Centre endpoints will
+  // generally only work while the add-on is an active Test Pilot experiment.
   //
   // Parameters:
   // * `event`: What is happening?  eg. `click`
@@ -59,15 +53,17 @@ Metrics.prototype = {
   // * `category` (optional): If you want to add a category for easy reporting
   //   later. eg. `mainmenu`
   //
-  // The final two parameters are optional, and are used together to capture
-  // information about multivariate or A/B tests that an experiment might be
-  // running.
+  // The final two optional parameters are used together to capture information
+  // about multivariate or A/B tests that an experiment might be running.
   //
   // * `study` (optional): String ID for a given test, eg. `button-test`. Note
   //   that Google Analytics truncates this field past a 40 byte limit, or, 40
-  //   non-entity ascii characters encoded as UTF-8. TODO make sure this is accurate.
+  //   non-entity ascii characters encoded as UTF-8. TODO make sure this is accurate. / reword the warning.
   // * `variant` (optional): An identifying string if you're running different
   //   variants. eg. `red-button` or `green-button`.
+  //
+  // TODO: would it be useful to version this API beyond this package's semver number?
+  //       come up with three good examples/reasons, or give up the idea.
   sendEvent: (event, object, category, study, variant) => { // TODO: will this arrow func preserve `this`? or do we need to bind in the ctor?
     if (!event) {
       throw new Error(`event field must be passed to sendEvent`);
@@ -80,26 +76,7 @@ Metrics.prototype = {
       this._sendGA(event, object, category, study, variant);
     }
 
-    // Construct and serialize the payload sent to telemetry.
-    const data = {
-      event: event,
-      object: object
-    };
-    if (category) {
-      data.category = category;
-    }
-    if (study) {
-      data.study = study;
-      data.variant = variant;
-    }
-    let msg;
-    try {
-      msg = JSON.stringify(data);
-    } catch(ex) {
-      throw new Error(`Unable to serialize metrics event: ${ex}`);
-    }
-    this._sendTelemetry(msg);
-    this._sendPingCentre(msg);
+    this._sendClientPing(msg);
   },
 
   /* private API */
@@ -112,7 +89,7 @@ Metrics.prototype = {
   },
   // Ensure required parameters are present and assign them.
   _initValues: function(opts) {
-    const {id, tid, cid, topic, debug} = opts;
+    const {id, tid, cid, topic, debug, transform} = opts;
 
     this.debug = !!debug;
     this._log(`_initValues: debug set to true; verbose debug logging enabled.`);
@@ -132,25 +109,31 @@ Metrics.prototype = {
     this.tid = tid;
     this.cid = cid;
 
+    if (transform && typeof transform === 'function') {
+      this.transform = transform;
+      this._log(`_initValues: Initialized this.transform to a function.`);
+    } else {
+      this.transform = null;
+      this._log(`_initValues: Initialized this.transform to null.`);
+    }
+
     // Experiment authors should just use the default 'testpilottest' topic.
     // `topic` is only configurable so that the Test Pilot addon can submit its
     // own pings using this same library.
     this.topic = topic || 'testpilottest';
-    this._log(`_initValues: Initialized this.topic to ${topic || 'testpilottest'}.`);
+    this._log(`_initValues: Initialized this.topic to ${this.topic}.);
   },
+
   // Load transports needed for Telemetry and GA submissions, and infer the
-  // addon's type.
+  // addon's type based on which approach works.
   _initTransports: function() {
     // The Telemetry transport is either the BroadcastChannel DOM API (for 
     // WebExtensions), or the nsIObserverService (for SDK and bootstrapped
     // addons).
     //
     // The GA transport is the navigator.sendBeacon DOM API. In the case of 
-    // SDK and bootstrapped addons, there might not be a DOM window yet, so get
-    // the reference from the hidden window. 
-    //
-    // The ping-centre transport is provided by the ping-centre library, so
-    // we don't really need to do anything here but initialize it.
+    // SDK and bootstrapped addons, there might not be a DOM window available,
+    // so get the reference from the hidden window. 
     try {
       // First, try the SDK approach.
       const { Cu } = require('chrome');
@@ -178,26 +161,52 @@ Metrics.prototype = {
         }
       }
     }
-
-    // TODO: not sure how to get the client UUID for webextensions. omit it for now.
-    this._pingClient = new PingCentre(this.topic);
   },
-  // Log to console if `this.debug` is true.
-  // Note that `this.debug` can be dynamically changed, for instance, set to
-  // true while the debugger is paused, and it'll work properly.
+
+  // Log to console when in debug mode. Debug mode is triggered by adding
+  // `debug: true` to the config object passed to the constructor, or, by
+  // setting `metrics.debug` to true, where `metrics` is a running instance
+  // of this class.
   _log: function(str) {
     if (this.debug) {
       console.log(str);
     }
   },
-  // Send a ping to Telemetry.
-  _sendTelemetry: function(msg) {
+
+  // Send a ping to the Test Pilot add-on, to be forwarded to the Mozilla
+  // Telemetry and Ping Centre services.
+  _sendClientPing: function(event, object, category, study, variant) {
+    // Construct and serialize the payload using the Telemetry format.
+    const data = {
+      event: event,
+      object: object
+    };
+
+    if (category) {
+      data.category = category;
+    }
+
+    if (study && variant) {
+      data.study = study;
+      data.variant = variant;
+    }
+    this._log(`Data object created: ${data}`);
+
+    let msg;
+
+    try {
+      msg = JSON.stringify(data);
+    } catch(ex) {
+      throw new Error(`Unable to serialize metrics event: ${ex}`);
+    }
+    this._log(`Data object stringified: ${msg}`);
+
     if (this.type === 'webextension') {
       try {
         this._channel.postMessage(msg); // TODO: is msg the right format?
-        this._log(`Sent metrics event to Telemetry: ${msg}`);
+        this._log(`Sent client ping via postMessage: ${msg}`);
       } catch (ex) {
-        this._log(`Failed to postMessage metrics event to Telemetry: ${ex}`);
+        this._log(`Failed to send client ping via postMessage: ${ex}`);
       }
     } else { /* type is 'sdk' or 'bootstrapped' */
       const subject = {
@@ -206,28 +215,24 @@ Metrics.prototype = {
           object: this.id
         }
       };
-      // Services should have been loaded by _initTransport().
+
       try {
         Services.obs.notifyObservers(subject, 'testpilot::send-metric', msg);
-        this._log(`Sent metrics event to Telemetry: ${msg}`);
+        this._log(`Sent client ping via notifyObservers: ${msg}`);
       } catch (ex) {
-        this._log(`Failed to notify observers of Telemetry metrics event: ${ex}`);
+        this._log(`Failed to send client ping via notifyObservers: ${ex}`);
       }
     }
   },
-  _sendPingCentre: function(event, object, category, study, variant) {
-    // ok.
-    // timestamp, test name, 
 
-  },
   // Send a ping to Google Analytics.
   _sendGA: function(event, object, category, study, variant) {
     if (!this.tid && !this.cid) {
-      return this._log(`Unable to send metrics event to GA, because tid and cid are missing.`);
+      return this._log(`Unable to send metrics event to GA, because 'tid' and 'cid' are missing.`);
     } else if (!this.tid) {
-      return this._log(`Unable to send metrics event to GA, because tid is missing.`);
+      return this._log(`Unable to send metrics event to GA, because 'tid' is missing.`);
     } else if (!this.cid) {
-      return this._log(`Unable to send metrics event to GA, because cid is missing.`);
+      return this._log(`Unable to send metrics event to GA, because 'cid' is missing.`);
     }
 
     if ((study && !variant) || (!study && variant)) {
@@ -235,25 +240,33 @@ Metrics.prototype = {
     }
 
     // For field descriptions, see https://developers.google.com/analytics/devguides/collection/protocol/v1/ 
-    const data = {
-      v: 1,
-      tid: this.tid,
-      cid: this.cid,
-      t: 'event',
-      ec: category || 'add-on Interactions', // TODO: is this a good default category? category is required, so something's needed here.
-      ea: object,
-      el: event
-    };
+    let data;
+    if (this.transform) {
+      data = this.transform.call(null, event, object, category, study, variant);
+      this._log(`Data object created by user-supplied transform: ${data}`);
+    } else {
+      data = {
+        v: 1,
+        tid: this.tid,
+        cid: this.cid,
+        t: 'event',
+        ec: category || 'add-on Interactions', // TODO: is this a good default category? category is required, so something's needed here.
+        ea: object,
+        el: event
+      };
 
-    // Send the optional multivariate testing info, if it was included.
-    if (study && variant) {
-      data.xid = study;
-      data.xval = variant;
+      // Send the optional multivariate testing info, if it was included.
+      if (study && variant) {
+        data.xid = study;
+        data.xval = variant;
+      }
+      this._log(`Data object created: ${data}`);
     }
 
-    _sendBeacon('https://ssl.google-analytics.com/collect', this._serialize(data));
+    const serialized = this._serialize(data);
+    _sendBeacon('https://ssl.google-analytics.com/collect', serialized);
   },
-  // Serialize GA parameter object into x-www-form-urlencoded format.
+  // Serialize an object into x-www-form-urlencoded format.
   // Example: {a:'b', foo:'b ar'} => 'a=b&foo=b%20ar'
   _serialize: function(obj) {
     const params = [];
@@ -263,7 +276,6 @@ Metrics.prototype = {
     });
     return params.join('&');
   }
-
 };
 
 module.exports = Metrics;
