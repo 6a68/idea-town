@@ -19,7 +19,7 @@
 // TODO: why not just use ES6 modules?
 
 // TODO: remember to add this to package.json
-const pingCentre = require('ping-centre');
+const PingCentre = require('ping-centre');
 
 // Abstract the sendBeacon DOM API, since sketchy hidden window magic is
 // needed to get the reference, if the addon is not a WebExtension.
@@ -38,7 +38,7 @@ function Metrics(opts) {
   // console in debug mode.
   this._initConsole();
   this._initValues(opts);
-  this._initTransport();
+  this._initTransports();
 }
 
 // o is an object with some stuff:
@@ -65,10 +65,7 @@ Metrics.prototype = {
   //
   // * `study` (optional): String ID for a given test, eg. `button-test`. Note
   //   that Google Analytics truncates this field past a 40 byte limit, or, 40
-  //   ascii characters encoded as UTF-8. Note that the string is trimmed, and
-  //   adjacent whitespace chars are converted to single spaces, before bytes
-  //   are counted. This library will log a message (visible in debug mode) if
-  //   the `study` field is too long.
+  //   non-entity ascii characters encoded as UTF-8. TODO make sure this is accurate.
   // * `variant` (optional): An identifying string if you're running different
   //   variants. eg. `red-button` or `green-button`.
   sendEvent: (event, object, category, study, variant) => { // TODO: will this arrow func preserve `this`? or do we need to bind in the ctor?
@@ -153,7 +150,7 @@ Metrics.prototype = {
     // the reference from the hidden window. 
     //
     // The ping-centre transport is provided by the ping-centre library, so
-    // we don't really need to do anything here.
+    // we don't really need to do anything here but initialize it.
     try {
       // First, try the SDK approach.
       const { Cu } = require('chrome');
@@ -181,6 +178,9 @@ Metrics.prototype = {
         }
       }
     }
+
+    // TODO: not sure how to get the client UUID for webextensions. omit it for now.
+    this._pingClient = new PingCentre(this.topic);
   },
   // Log to console if `this.debug` is true.
   // Note that `this.debug` can be dynamically changed, for instance, set to
@@ -195,6 +195,7 @@ Metrics.prototype = {
     if (this.type === 'webextension') {
       try {
         this._channel.postMessage(msg); // TODO: is msg the right format?
+        this._log(`Sent metrics event to Telemetry: ${msg}`);
       } catch (ex) {
         this._log(`Failed to postMessage metrics event to Telemetry: ${ex}`);
       }
@@ -208,10 +209,16 @@ Metrics.prototype = {
       // Services should have been loaded by _initTransport().
       try {
         Services.obs.notifyObservers(subject, 'testpilot::send-metric', msg);
+        this._log(`Sent metrics event to Telemetry: ${msg}`);
       } catch (ex) {
         this._log(`Failed to notify observers of Telemetry metrics event: ${ex}`);
       }
     }
+  },
+  _sendPingCentre: function(event, object, category, study, variant) {
+    // ok.
+    // timestamp, test name, 
+
   },
   // Send a ping to Google Analytics.
   _sendGA: function(event, object, category, study, variant) {
@@ -227,47 +234,36 @@ Metrics.prototype = {
       this._log(`Warning: 'study' and 'variant' must both be present to be recorded by Google Analytics.`);
     }
 
-    // TODO: I think we need the hidden window again, to get FormData from bootstrapped / sdk.
-    const data = new _FormData();
-
     // For field descriptions, see https://developers.google.com/analytics/devguides/collection/protocol/v1/ 
-    data.append('v', 1);
-    data.append('tid', this.tid);
-    data.append('cid', this.cid);
-    data.append('t', 'event');
-    data.append('ec', category || 'add-on Interactions'); // TODO: should we not default ec to 'add-on Interactions'?
-    data.append('ea', object);
-    data.append('el', event);
+    const data = {
+      v: 1,
+      tid: this.tid,
+      cid: this.cid,
+      t: 'event',
+      ec: category || 'add-on Interactions', // TODO: is this a good default category? category is required, so something's needed here.
+      ea: object,
+      el: event
+    };
 
     // Send the optional multivariate testing info, if it was included.
     if (study && variant) {
-      this._checkStudyLength(study);
-      data.append('xid', study);
-      data.append('xval', variant);
+      data.xid = study;
+      data.xval = variant;
     }
 
-    _sendBeacon('https://ssl.google-analytics.com/collect', data);
+    _sendBeacon('https://ssl.google-analytics.com/collect', this._serialize(data));
   },
-  // If the study name is too long, GA will truncate it. Count bytes and log a
-  // warning if the name exceeds 40 bytes.
-  _checkStudyLength: function(str) {
-    // GA preprocesses text fields by removing leading / trailing whitespace,
-    // and converting adjacent whitespace chars to single spaces[1], then
-    // counts up 40 bytes[2], truncating the xid past that limit.
-    // [1] https://developers.google.com/analytics/devguides/collection/protocol/v1/reference#text
-    // [2] https://developers.google.com/analytics/devguides/collection/protocol/v1/parameters#xid
-    const processed = encodeURIComponent(str).trim().replace(/\s{2,}/, ' ');
-    // TODO: is TextEncoder always available in add-ons?
-    // I think so: https://dxr.mozilla.org/mozilla-central/source/toolkit/components/extensions/Extension.jsm#24
-    const length = (new TextEncoder('utf-8').encode(encodeURI(processed))).length;
-    if (length > 40) {
-      this._log(`Warning: study name '${processed}' is longer than 40 bytes and will be truncated by Google Analytics.`);
-    }
+  // Serialize GA parameter object into x-www-form-urlencoded format.
+  // Example: {a:'b', foo:'b ar'} => 'a=b&foo=b%20ar'
+  _serialize: function(obj) {
+    const params = [];
+    Object.entries(obj).forEach(item => {
+      const encoded = encodeURIComponent(item[0]) + '=' + encodeURIComponent(item[1]);
+      params.push(encoded);
+    });
+    return params.join('&');
   }
 
 };
 
-function ga(o) {
-  // TODO: do webextensions have fetch()?
-  // TODO: I think the hidden window will work to get fetch otherwise.
-}
+module.exports = Metrics;

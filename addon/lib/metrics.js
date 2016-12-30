@@ -27,16 +27,6 @@ const PREFERENCE_OVERRIDES = {
   'datareporting.healthreport.uploadEnabled': true
 };
 
-// Schema for GA Measurement Protocol, v1.
-// https://developers.google.com/analytics/devguides/collection/protocol/v1/
-const gaSchema = Joi.object().keys({
-  v: Joi.string().required().value('1'),
-  tid: Joi.string().required().regex(/^UA-\d{4,10}-\d{1,4}$/i),
-  cid: Joi.string().required().uuid({version: ['uuidv4']}),
-  t: Joi.string().required().only('pageview', 'screenview', 'event',
-     'transaction', 'item', 'social', 'exception', 'timing')
-}).options({allowUnknown: true});
-
 // nsIObserver message subjects.
 const TELEMETRY_TESTPILOT = 'testpilot';
 const TELEMETRY_EXPERIMENT = 'testpilottest';
@@ -129,18 +119,12 @@ const Metrics = module.exports = {
         }
       ]
     };
+
     TelemetryController.submitExternalPing(
       TELEMETRY_TESTPILOT,
       payload,
       { addClientId: true, addEnvironment: true }
     );
-
-    Metrics.sendGAEvent({
-      t: 'event',
-      ec: 'add-on Interactions',
-      ea: object,
-      el: eventName
-    });
 
     // Duplicate the work done by submitExternalPing, then send to Ping Centre.
     const ping = TelemetryController.getCurrentPingData();
@@ -174,6 +158,9 @@ const Metrics = module.exports = {
   },
 
   sendGAEvent: function(data) {
+    // So, here, we'd do this instead:
+    
+
     data.v = 1; // Version -- https://developers.google.com/analytics/devguides/collection/protocol/v1/
     data.tid = 'UA-49796218-47';
     data.cid = store.clientUUID;
@@ -183,13 +170,6 @@ const Metrics = module.exports = {
   onExperimentPing: function(ev) {
     const timestamp = Date.now();
     const { subject, data } = ev;
-
-    // Pull the google analytics ping out of the data object, if found.
-    let gaPing;
-    if ('ga' in data) {
-      gaPing = data.ga;
-      delete data.ga;
-    }
 
     AddonManager.getAddonByID(subject, addon => {
       const payload = {
@@ -206,14 +186,6 @@ const Metrics = module.exports = {
         TELEMETRY_EXPERIMENT, payload,
         { addClientId: true, addEnvironment: true }
       );
-      if (gaPing) {
-        Joi.validate(gaPing, gaSchema, function(err) {
-          if (err) {
-            return console.error('Unable to send experiment ping to GA: ', err);
-          }
-          sendBeacon('https://ssl.google-analytics.com/collect', gaPing);
-        });
-      }
     });
   }
 };
