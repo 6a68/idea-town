@@ -17,9 +17,7 @@ class Metrics {
   // Required keys in the config object:
   //   tid: GA tid. required to use GA.
   //   cid: GA cid. required to use GA.
-  //   id: the addon's ID (like '@min-vid'). While FF now supports WebExtensions
-  //       without an explicit ID, because TxP experiments aren't hosted on AMO,
-  //       an ID is needed to sign them anyway.
+  //   id: the addon's ID (like '@min-vid').
   //
   // Optional keys in the config object:
   //   transform: a function used to modify GA pings before sending them. The
@@ -36,10 +34,10 @@ class Metrics {
   //   topic: 'testpilottest' by default. Experiments should not need to change
   //          this value. It's only changed by the Test Pilot addon.
   //
-  //   debug: false by default; if true, this module will console.log info that
-  //          is useful for debugging. Note that this value can be changed after
-  //          the object is instantiated: set  `metrics.debug = true` in a paused
-  //          debugger to see what is or isn't happening.
+  //   debug: false by default; if true, this module will log debugging info to
+  //          the console. Note that this value can be changed after the object
+  //          is instantiated, by setting `metrics.debug = true` in a paused
+  //          debugger.
   constructor(opts) {
     // Note: the console must be initialized first, since other init steps log to
     // console in debug mode.
@@ -67,8 +65,8 @@ class Metrics {
   // about multivariate or A/B tests that an experiment might be running.
   //
   // * `study` (optional): String ID for a given test, eg. `button-test`. Note
-  //   that Google Analytics truncates this field past a 40 byte limit, or, 40
-  //   non-entity ascii characters encoded as UTF-8. TODO make sure this is accurate. / reword the warning.
+  //   that Google Analytics truncates this field past a 40 byte limit (subject
+  //   to some complex rewriting rules). TODO insert link
   // * `variant` (optional): An identifying string if you're running different
   //   variants. eg. `red-button` or `green-button`.
   //
@@ -103,10 +101,12 @@ class Metrics {
     const {id, tid, cid, topic, debug, transform} = opts;
 
     this.debug = !!debug;
+    // Note: this log statement makes sense because this._log calls are
+    // discarded if this.debug is false.
     this._log(`_initValues: debug set to true; verbose debug logging enabled.`);
 
     if (!id) {
-      throw new Error('id is required.');
+      throw new Error('id is required.'); // TODO: should this really throw? shouldn't it silently fail?
     } 
     this.id = id;
     this._log(`_initValues: Initialized this.id to ${id}.`);
@@ -132,7 +132,7 @@ class Metrics {
     // `topic` is only configurable so that the Test Pilot addon can submit its
     // own pings using this same library.
     this.topic = topic || 'testpilottest';
-    this._log(`_initValues: Initialized this.topic to ${this.topic}.);
+    this._log(`_initValues: Initialized this.topic to ${this.topic}.`);
   }
 
   // Load transports needed for Telemetry and GA submissions, and infer the
@@ -144,31 +144,31 @@ class Metrics {
     //
     // The GA transport is the navigator.sendBeacon DOM API. In the case of 
     // SDK and bootstrapped addons, there might not be a DOM window available,
-    // so get the reference from the hidden window. 
+    // so we must get the reference from the hidden window. 
     try {
       // First, try the SDK approach.
       const { Cu } = require('chrome');
       Cu.import('resource://gre/modules/Services.jsm');
       _sendBeacon = Services.appShell.hiddenDOMWindow.navigator.sendBeacon;
       this.type = 'sdk';
-      this._log('Initialized SDK addon transports.');
+      this._log(`Initialized SDK addon transports.`);
     } catch(ex) {
       // Next, try the bootstrapped approach.
       try {
         Components.utils.import('resource://gre/modules/Services.jsm');
         _sendBeacon = Services.appShell.hiddenDOMWindow.navigator.sendBeacon;
         this.type = 'bootstrapped';
-        this._log('Initialized bootstrapped addon transports.');
+        this._log(`Initialized bootstrapped addon transports.`);
       } catch(ex) {
         // Finally, try the WebExtension approach.
         try {
           this._channel = new BroadcastChannel(this.topic);
           _sendBeacon = navigator.sendBeacon; // TODO: will this always be visible to webextensions?
           this.type = 'webextension';
-          this._log('Initialized WebExtension addon transports.');
+          this._log(`Initialized WebExtension addon transports.`);
         } catch (ex) {
           // If all three approaches fail, give up.
-          throw new Error('Unable to initialize transports: ', ex);
+          throw new Error(`Unable to initialize transports.`);
         }
       }
     }
@@ -201,25 +201,28 @@ class Metrics {
       data.study = study;
       data.variant = variant;
     }
+    // TODO: is this too verbose?
     this._log(`Data object created: ${data}`);
 
-    let msg;
+    let stringified;
 
     try {
-      msg = JSON.stringify(data);
+      stringified = JSON.stringify(data);
     } catch(ex) {
       throw new Error(`Unable to serialize metrics event: ${ex}`);
     }
+    // TODO: ditto here: too verbose, or super useful?
     this._log(`Data object stringified: ${msg}`);
 
     if (this.type === 'webextension') {
       try {
-        this._channel.postMessage(msg); // TODO: is msg the right format?
-        this._log(`Sent client ping via postMessage: ${msg}`);
+        // NOTE: postMessage the object, not the stringified object.
+        this._channel.postMessage(data);
+        this._log(`Sent client ping via postMessage: ${data}`);
       } catch (ex) {
         this._log(`Failed to send client ping via postMessage: ${ex}`);
       }
-    } else { /* type is 'sdk' or 'bootstrapped' */
+    } else { /* this.type is 'sdk' or 'bootstrapped' */
       const subject = {
         wrappedJSObject: {
           observersModuleSubjectWrapper: true,
@@ -228,8 +231,8 @@ class Metrics {
       };
 
       try {
-        Services.obs.notifyObservers(subject, 'testpilot::send-metric', msg);
-        this._log(`Sent client ping via notifyObservers: ${msg}`);
+        Services.obs.notifyObservers(subject, 'testpilot::send-metric', stringified);
+        this._log(`Sent client ping via notifyObservers: ${stringified}`);
       } catch (ex) {
         this._log(`Failed to send client ping via notifyObservers: ${ex}`);
       }
@@ -247,7 +250,7 @@ class Metrics {
     }
 
     if ((study && !variant) || (!study && variant)) {
-      this._log(`Warning: 'study' and 'variant' must both be present to be recorded by Google Analytics.`);
+      this._log(`Warning: 'study' and 'variant' must both be present for either to be sent to GA.`);
     }
 
     // For field descriptions, see https://developers.google.com/analytics/devguides/collection/protocol/v1/ 
@@ -274,13 +277,13 @@ class Metrics {
       this._log(`Data object created: ${data}`);
     }
 
-    const serialized = this._serialize(data);
+    const serialized = this._urlEncode(data);
     _sendBeacon('https://ssl.google-analytics.com/collect', serialized);
   }
 
   // Serialize an object into x-www-form-urlencoded format.
   // Example: {a:'b', foo:'b ar'} => 'a=b&foo=b%20ar'
-  _serialize(obj) {
+  _urlEncode(obj) {
     const params = [];
     Object.entries(obj).forEach(item => {
       const encoded = encodeURIComponent(item[0]) + '=' + encodeURIComponent(item[1]);
