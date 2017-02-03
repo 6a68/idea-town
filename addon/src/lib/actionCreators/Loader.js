@@ -107,12 +107,21 @@ export default class Loader {
         })
       )
       .then(xs => {
+        // Here's where clicked (from lib/reducers/ui.js) makes its reappearance:
+        // It's actually visible under state.ui.clicked. so it is nicely nested,
+        // but still available.
         const { experiments, ui: { clicked } } = getState();
 
         const newExperiments = diffExperimentList(experiments, xs);
         // eslint-disable-next-line prefer-const
         for (let experiment of newExperiments) {
           if (experiment.launchDate.getTime() > clicked) {
+            // OK, so. if you have new experiments,
+            // first create the SET_BADGE action with
+            // 'new_badge' as the text. This returns a function
+            // (see lib/actions.js).
+            // Then, dispatch that function, meaning, have that
+            // function transform the data store.
             dispatch(actions.SET_BADGE({ text: _('new_badge') }));
           }
         }

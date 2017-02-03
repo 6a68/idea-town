@@ -81,6 +81,8 @@ export const EXPERIMENT_UNINSTALLED = createAction('EXPERIMENT_UNINSTALLED', [
   'experiment'
 ]);
 export const CHANGE_ENV = createAction('CHANGE_ENV', []);
+// The SET_BADGE action just calls createAction, which returns
+// a function with a type property.
 export const SET_BADGE = createAction('SET_BADGE', [ 'text' ]);
 export const MAIN_BUTTON_CLICKED = createAction('MAIN_BUTTON_CLICKED', [
   'time'
