@@ -14,10 +14,13 @@ import { storage } from 'sdk/simple-storage';
 import {
   TelemetryController
 } from 'resource://gre/modules/TelemetryController.jsm';
+import { ClientID } from 'resource://gre/modules/ClientID.jsm';
+import PingCentre from 'ping-centre';
 
 import type { ReduxStore } from 'testpilot/types';
 
 const startTime = (Services.startup.getStartupInfo().process: Date);
+const pingCentre = new PingCentre('testpilot', ClientID.getCachedClientID());
 
 function makeTimestamp(timestamp = Date.now()) {
   return Math.round((timestamp - startTime) / 1000);
@@ -58,7 +61,25 @@ export default class Telemetry {
       addClientId: true,
       addEnvironment: true
     });
-    // TODO: right here, call ping centre with the telemetry ping.
+
+    // A little work is required to replicate the ping sent to Telemetry
+    // via the `submitExternalPing('testpilot', payload, opts)` call:
+    const pcPing = TelemetryController.getCurrentPingData();
+    pcPing.type = 'testpilot';
+    pcPing.payload = payload;
+
+    const pcPayload = {
+      event_type: event, // NOTE: ping centre uses 'event_type', not 'event'
+      object: object,
+      client_time: makeTimestamp(time),
+      addon_version: self.version,
+      firefox_version: pcPing.environment.build.version,
+      os_name: pcPing.environment.system.os.name,
+      os_version: pcPing.environment.system.os.version,
+      locale: pcPing.environment.settings.locale,
+      raw: JSON.stringify(pcPing)
+    };
+    pingCentre.sendPing(pcPayload);
 
     this.sendGAEvent({
       t: 'event',
