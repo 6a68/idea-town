@@ -16,6 +16,8 @@ import { reducer as sideEffects } from './sideEffects';
 import { reducer as ui } from './ui';
 import { combineReducers } from 'redux';
 
+// Oh, ok. so here, all the reducers get merged.
+// These reducers are actually inserted into the state object.
 export default combineReducers({
   baseUrl,
   clientUUID,

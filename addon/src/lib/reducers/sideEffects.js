@@ -129,6 +129,14 @@ export function reducer(
         telemetry.ping(payload.experiment.addon_id, `rated_${payload.rating}`);
       };
 
+    // OK, so when the SET_BADGE action is dispatched, this reducer
+    // is called, along with the reducer in lib/reducers/ui.js.
+    // lib/reducers/ui.js actually changes the global state.
+    // all this reducer does is produce a side effect (UI update) by
+    // calling lib/actionCreators/MainUI setBadge method.
+    //
+    // The setBadge() method will separately get the badge text from the
+    // shared global state. and the loop is closed.
     case actions.SET_BADGE.type:
       return ({ ui }) => ui.setBadge();
 

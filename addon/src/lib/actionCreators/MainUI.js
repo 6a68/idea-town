@@ -29,6 +29,11 @@ export default class MainUI {
     });
   }
 
+  // So, this, at last, is where the UI is updated by lib/reducers/sideEffects.
+  // Note that the data is not passed in. Instead, the relevant data is
+  // inserted into the shared global state by a different reducer (reducers/ui),
+  // then this Action toggles the 'new' badge by setting the ActionButton's
+  // badge property.
   setBadge() {
     this.button.badge = this.store.getState().ui.badge;
   }
