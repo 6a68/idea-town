@@ -50,6 +50,8 @@ function experimentPing(event: ExperimentPingData) {
       addClientId: true,
       addEnvironment: true
     });
+    // TODO: right here, call ping-centre.
+    // TODO: also, since this is the ping-centre integration branch, add the daily ping action.
   });
 }
 
