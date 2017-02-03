@@ -58,6 +58,7 @@ export default class Telemetry {
       addClientId: true,
       addEnvironment: true
     });
+    // TODO: right here, call ping centre with the telemetry ping.
 
     this.sendGAEvent({
       t: 'event',
