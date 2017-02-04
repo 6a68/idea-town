@@ -72,6 +72,7 @@ export default class Telemetry {
       event_type: event, // NOTE: ping centre uses 'event_type', not 'event'
       object: object,
       client_time: makeTimestamp(time),
+      addon_id: self.id,
       addon_version: self.version,
       firefox_version: pcPing.environment.build.version,
       os_name: pcPing.environment.system.os.name,
