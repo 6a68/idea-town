@@ -17,6 +17,15 @@ const config = {
   target: 'node',
   module: {
     loaders: [
+      // try adding a separate loader for ping-centre
+      {
+        test: /\.js$/,
+        loader: 'babel-loader',
+        query: {
+          presets: [ 'es2015', 'stage-2' ]
+        },
+        include: /node_modules\/ping-centre/
+      },
       {
         test: /\.js$/,
         loader: 'babel-loader',
@@ -24,10 +33,8 @@ const config = {
           presets: [ 'es2015', 'stage-2' ],
           plugins: [ 'transform-flow-strip-types' ]
         },
-        include: [
-          __dirname,
-          /node_modules\/ping-centre/
-        ]
+        exclude: /node_modules/,
+        include: __dirname
       }
     ]
   },
