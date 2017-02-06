@@ -49,7 +49,7 @@
   },
   "dependencies": {
     "lodash": "^4.15.0",
-    "ping-centre": "6a68/ping-centre#a901db3",
+    "ping-centre": "6a68/ping-centre#694fbd7",
     "redux": "^3.6.0",
     "redux-logger": "^2.8.0",
     "seedrandom": "^2.4.2"
