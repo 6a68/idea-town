@@ -30,7 +30,7 @@ const config = {
         test: /\.js$/,
         loader: 'babel-loader',
         query: {
-          presets: [ 'es2015', 'stage-2' ],
+          presets: [ [ 'es2015', { modules: false } ], 'stage-2' ],
           plugins: [ 'transform-flow-strip-types' ]
         },
         exclude: /node_modules/,
