@@ -64,6 +64,8 @@ export default class InstallManager {
       dispatch(actions.SELF_INSTALLED());
     } else if (reason === 'enable') {
       dispatch(actions.SELF_ENABLED());
+    } else if (reason === 'startup') {
+      dispatch(actions.BROWSER_STARTUP());
     }
   }
 
