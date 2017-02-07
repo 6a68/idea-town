@@ -16,7 +16,7 @@ const config = {
   },
   target: 'node',
   resolve: {
-    packageAlias: 'browser'
+    aliasFields: ['browser']
   },
   module: {
     loaders: [
