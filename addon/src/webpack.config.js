@@ -15,6 +15,9 @@ const config = {
     libraryTarget: 'commonjs'
   },
   target: 'node',
+  node: {
+    url: 'empty'
+  },
   module: {
     loaders: [
       // try adding a separate loader for ping-centre
