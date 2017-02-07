@@ -15,7 +15,7 @@ import {
   TelemetryController
 } from 'resource://gre/modules/TelemetryController.jsm';
 import { ClientID } from 'resource://gre/modules/ClientID.jsm';
-import PingCentre from 'ping-centre';
+import PingCentre from 'mozilla-ping-centre';
 
 import type { ReduxStore } from 'testpilot/types';
 

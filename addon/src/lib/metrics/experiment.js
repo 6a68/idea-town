@@ -14,7 +14,7 @@ import { storage } from 'sdk/simple-storage';
 import {
   TelemetryController
 } from 'resource://gre/modules/TelemetryController.jsm';
-import PingCentre from 'ping-centre';
+import PingCentre from 'mozilla-ping-centre';
 // TODO: just make this another sideEffect and clean this code up some.
 import { ClientID } from 'resource://gre/modules/ClientID.jsm';
 const pingCentre = new PingCentre('testpilot', ClientID.getCachedClientID());

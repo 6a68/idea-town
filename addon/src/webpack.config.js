@@ -19,12 +19,12 @@ const config = {
     loaders: [
       // try adding a separate loader for ping-centre
       {
-        test: /\.js$/,
+        test: /ping-centre\.js$/,
         loader: 'babel-loader',
         query: {
           presets: [ 'es2015', 'stage-2' ]
         },
-        include: /node_modules\/ping-centre/
+        include: /node_modules\/mozilla-ping-centre/
       },
       {
         test: /\.js$/,
