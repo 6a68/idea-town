@@ -15,8 +15,8 @@ const config = {
     libraryTarget: 'commonjs'
   },
   target: 'node',
-  node: {
-    url: 'empty'
+  resolve: {
+    packageAlias: 'browser'
   },
   module: {
     loaders: [
