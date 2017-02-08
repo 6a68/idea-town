@@ -14,10 +14,7 @@ const config = {
     filename: 'bundle.js',
     libraryTarget: 'commonjs'
   },
-  target: 'node',
-  resolve: {
-    aliasFields: ['browser']
-  },
+  target: 'web',
   module: {
     loaders: [
       // try adding a separate loader for ping-centre
